@@ -30,26 +30,26 @@ class YouTrackMCPServer:
         Initialize the YouTrack MCP server.
 
         Args:
-            transport: The transport mode hint ('stdio', 'sse', or None).
-                      Used for wrapper selection and logging only.
-                      When None, defaults to 'stdio' for MCP server compatibility.
+            transport: The transport mode for logging/diagnostics ('stdio', 'sse', or None).
+                      Used only for logging purposes - does not affect actual behavior.
+                      When None, defaults to 'stdio' for consistency with typical MCP deployment.
                       Note: FastMCP performs its own internal transport auto-detection
-                      based on stdin.isatty() - this parameter does not override that.
+                      based on stdin.isatty() and this parameter does not override that.
         """
-        # Default to stdio transport for MCP server use case
-        # This matches the most common deployment scenario (Claude Desktop, stdio piping)
-        # Note: This is a hint for our wrapper selection, not passed to FastMCP
+        # Default to stdio for logging consistency with typical MCP server deployment
+        # This is purely a diagnostic/logging hint - FastMCP does its own detection
         if transport is None:
             transport = "stdio"
 
+        # Store for logging only - not used for any behavioral decisions
         self.transport_mode = transport
 
         logger.info(
-            f"Initializing YouTrack MCP server with {transport} transport mode (hint for wrapper selection)"
+            f"Initializing YouTrack MCP server with {transport} transport mode"
         )
 
         # Initialize server with ToolServerBase (FastMCP)
-        # Note: FastMCP does not accept a transport parameter - it auto-detects
+        # FastMCP does not accept a transport parameter - it auto-detects internally
         # based on whether stdin/stdout are TTY devices
         self.server = ToolServerBase(
             name=config.MCP_SERVER_NAME,
@@ -161,7 +161,8 @@ class YouTrackMCPServer:
             func: The tool function
             description: Description of what the tool does
             parameter_descriptions: Optional descriptions for function parameters
-            should_stream: Whether this tool should use streaming (when supported)
+            should_stream: Whether this tool should use streaming (for logging/diagnostic purposes only)
+                          Note: Actual streaming behavior is determined by FastMCP, not this parameter
         """
         # Skip if tool already registered
         if name in self._registered_tools:
@@ -256,7 +257,7 @@ class YouTrackMCPServer:
         Args:
             func: The original tool function
             name: The tool name
-            should_stream: Whether this function should use streaming
+            should_stream: Logging/diagnostic hint only - not used for actual behavior
 
         Returns:
             A wrapped function that handles errors and ensures proper output format
