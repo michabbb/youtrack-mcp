@@ -36,17 +36,12 @@ class YouTrackMCPServer:
         """
         # FastMCP auto-detects transport based on whether stdin/stdout are TTY
         # When running as MCP server (piped): stdin.isatty() = False -> uses STDIO transport
-        # When running interactively: stdin.isatty() = True -> could use HTTP (but we force STDIO)
+        # When running interactively: stdin.isatty() = True -> typically interactive mode
 
         # Store the transport mode hint for logging and wrapper selection
-        # If not specified, we'll determine it the same way FastMCP does
+        # Default to stdio to match FastMCP's most common use case (MCP servers)
         if transport is None:
-            # FastMCP's logic: if stdin is NOT a TTY, it's being piped -> use STDIO
-            # This matches Claude Desktop's behavior when it spawns the MCP server
-            if not sys.stdin.isatty():
-                transport = "stdio"
-            else:
-                transport = "stdio"  # Default to stdio for consistency
+            transport = "stdio"
 
         self.transport_mode = transport
 
@@ -523,13 +518,9 @@ class YouTrackMCPServer:
                     # Re-raise other runtime errors
                     raise
 
-        # Return the appropriate wrapper based on the transport mode
-        if self.transport_mode == "http":
-            # For HTTP transport, always use the async wrapper
-            return async_wrapper
-        else:
-            # For stdio transport, use sync wrapper for sync functions
-            return sync_wrapper if not is_async else async_wrapper
+        # Return the appropriate wrapper based on function type
+        # Use async wrapper for coroutine functions, sync wrapper for regular functions
+        return async_wrapper if is_async else sync_wrapper
 
     def _extract_real_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """
