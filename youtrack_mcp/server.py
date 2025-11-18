@@ -47,11 +47,11 @@ class YouTrackMCPServer:
         # Store the transport mode for later reference
         self.transport_mode = transport
 
-        # Initialize server with ToolServerBase
+        # Initialize server with ToolServerBase (FastMCP)
+        # Note: FastMCP doesn't accept transport parameter - it auto-detects
         self.server = ToolServerBase(
             name=config.MCP_SERVER_NAME,
             instructions=config.MCP_SERVER_DESCRIPTION,
-            transport=transport,  # ToolServerBase expects 'transport' parameter
         )
 
         # Initialize tool registry
