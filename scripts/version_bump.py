@@ -20,7 +20,8 @@ def get_current_version():
     raise ValueError("Could not find version in version.py")
 
 def update_version(new_version):
-    """Update the version in version.py"""
+    """Update the version in version.py and package.json"""
+    # Update Python version
     version_file = Path(__file__).parent.parent / "youtrack_mcp" / "version.py"
     with open(version_file, 'r') as f:
         content = f.read()
@@ -34,7 +35,26 @@ def update_version(new_version):
     with open(version_file, 'w') as f:
         f.write(new_content)
     
-    print(f"Updated version to {new_version}")
+    print(f"Updated Python version to {new_version}")
+    
+    # Update NPM package.json version
+    package_json_file = Path(__file__).parent.parent / "package.json"
+    if package_json_file.exists():
+        with open(package_json_file, 'r') as f:
+            package_content = f.read()
+        
+        new_package_content = re.sub(
+            r'"version": "[^"]+"',
+            f'"version": "{new_version}"',
+            package_content
+        )
+        
+        with open(package_json_file, 'w') as f:
+            f.write(new_package_content)
+        
+        print(f"Updated NPM package.json version to {new_version}")
+    else:
+        print("⚠️  package.json not found, skipping NPM version update")
 
 def bump_version(version, bump_type):
     """Bump version based on type (major, minor, patch)"""
@@ -64,19 +84,22 @@ def run_command(cmd, check=True):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python version_bump.py <bump_type|version>")
+        print("Usage: python version_bump.py <bump_type|version> [--dry-run]")
         print("  bump_type: major, minor, patch")
         print("  version: specific version like 1.0.0")
+        print("  --dry-run: Only calculate the new version, don't make changes")
         print("Examples:")
         print("  python version_bump.py patch    # 1.0.0 -> 1.0.1")
         print("  python version_bump.py minor    # 1.0.0 -> 1.1.0")
         print("  python version_bump.py major    # 1.0.0 -> 2.0.0")
         print("  python version_bump.py 1.1.0    # Set to specific version")
+        print("  python version_bump.py patch --dry-run  # Just show what would happen")
         sys.exit(1)
     
     arg = sys.argv[1]
+    dry_run = '--dry-run' in sys.argv
+    
     current_version = get_current_version()
-    print(f"Current version: {current_version}")
     
     # Determine new version
     if arg in ['major', 'minor', 'patch']:
@@ -85,6 +108,12 @@ def main():
         # Assume it's a specific version
         new_version = arg
     
+    if dry_run:
+        # For dry run, just print the new version and exit
+        print(new_version)
+        return
+    
+    print(f"Current version: {current_version}")
     print(f"New version: {new_version}")
     
     # Check if working directory is clean

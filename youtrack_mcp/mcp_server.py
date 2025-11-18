@@ -25,7 +25,10 @@ class MCPServer:
         # Add issue tools (now LLM-optimized)
         issue_tool_definitions = self.issue_tools.get_tool_definitions()
         for tool_name, tool_config in issue_tool_definitions.items():
-            function = getattr(self.issue_tools, tool_name, None)
+            # Use function from tool definition if provided, otherwise get from class
+            function = tool_config.get("function") or getattr(
+                self.issue_tools, tool_name, None
+            )
             if function:
                 all_tools[tool_name] = {
                     "description": tool_config["description"],
@@ -35,10 +38,12 @@ class MCPServer:
                     ),
                 }
 
-        # Add project tools (now LLM-optimized)
+        # Add project tools
         project_tool_definitions = self.project_tools.get_tool_definitions()
         for tool_name, tool_config in project_tool_definitions.items():
-            function = getattr(self.project_tools, tool_name, None)
+            function = tool_config.get("function") or getattr(
+                self.project_tools, tool_name, None
+            )
             if function:
                 all_tools[tool_name] = {
                     "description": tool_config["description"],
@@ -48,10 +53,12 @@ class MCPServer:
                     ),
                 }
 
-        # Add user tools (now LLM-optimized)
+        # Add user tools
         user_tool_definitions = self.user_tools.get_tool_definitions()
         for tool_name, tool_config in user_tool_definitions.items():
-            function = getattr(self.user_tools, tool_name, None)
+            function = tool_config.get("function") or getattr(
+                self.user_tools, tool_name, None
+            )
             if function:
                 all_tools[tool_name] = {
                     "description": tool_config["description"],
@@ -61,10 +68,12 @@ class MCPServer:
                     ),
                 }
 
-        # Add search tools (now LLM-optimized)
+        # Add search tools
         search_tool_definitions = self.search_tools.get_tool_definitions()
         for tool_name, tool_config in search_tool_definitions.items():
-            function = getattr(self.search_tools, tool_name, None)
+            function = tool_config.get("function") or getattr(
+                self.search_tools, tool_name, None
+            )
             if function:
                 all_tools[tool_name] = {
                     "description": tool_config["description"],
@@ -74,17 +83,19 @@ class MCPServer:
                     ),
                 }
 
-        # Add resources tools (avoid conflicts with primary tools)
-        resources_tool_definitions = self.resources_tools.get_tool_definitions()
-        for tool_name, tool_config in resources_tool_definitions.items():
-            function = getattr(self.resources_tools, tool_name, None)
+        # Add resource tools (with conflict resolution)
+        resource_tool_definitions = self.resources_tools.get_tool_definitions()
+        for tool_name, tool_config in resource_tool_definitions.items():
+            function = tool_config.get("function") or getattr(
+                self.resources_tools, tool_name, None
+            )
             if function:
-                # If there's a conflict, prefix the resource tool with 'resource_'
-                final_name = tool_name
+                # Handle naming conflicts by prefixing resource tools
+                final_tool_name = tool_name
                 if tool_name in all_tools:
-                    final_name = f"resource_{tool_name}"
+                    final_tool_name = f"resource_{tool_name}"
 
-                all_tools[final_name] = {
+                all_tools[final_tool_name] = {
                     "description": tool_config["description"],
                     "function": function,
                     "parameter_descriptions": tool_config.get(
@@ -93,11 +104,3 @@ class MCPServer:
                 }
 
         return all_tools
-
-    def close(self) -> None:
-        """Close the MCP server."""
-        self.issue_tools.close()
-        self.project_tools.close()
-        self.user_tools.close()
-        self.search_tools.close()
-        self.resources_tools.close()

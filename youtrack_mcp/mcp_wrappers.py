@@ -61,7 +61,10 @@ def sync_wrapper(func: Callable) -> Callable:
         except Exception as e:
             logger.exception(f"Error calling {func.__name__}: {str(e)}")
             return json.dumps(
-                {"error": f"Error calling {func.__name__}: {str(e)}", "status": "error"}
+                {
+                    "error": f"Error calling {func.__name__}: {str(e)}",
+                    "status": "error",
+                }
             )
 
     # Store whether this is a bound method for later reference
@@ -101,9 +104,20 @@ def process_parameters(
         # Process args_value based on its type
         if isinstance(args_value, str):
             # Try to parse as JSON if it looks like JSON
-            if args_value.strip().startswith("{") and args_value.strip().endswith("}"):
+            if args_value.strip().startswith(
+                "{"
+            ) and args_value.strip().endswith("}"):
                 try:
-                    args_dict = json.loads(args_value)
+                    # Clean up common JSON formatting issues
+                    cleaned_json = args_value.strip()
+                    # Remove extra closing braces (common MCP issue)
+                    if cleaned_json.count('}') > cleaned_json.count('{'):
+                        logger.info(f"Fixing JSON with extra closing braces: {cleaned_json}")
+                        # Remove extra } from the end
+                        while cleaned_json.endswith('}}') and cleaned_json.count('}') > cleaned_json.count('{'):
+                            cleaned_json = cleaned_json[:-1]
+                    
+                    args_dict = json.loads(cleaned_json)
                     if isinstance(args_dict, dict):
                         # Add each key-value pair to kwargs
                         for k, v in args_dict.items():
@@ -131,11 +145,20 @@ def process_parameters(
         # Process kwargs_value based on its type
         if isinstance(kwargs_value, str):
             # Try to parse as JSON if it looks like JSON
-            if kwargs_value.strip().startswith("{") and kwargs_value.strip().endswith(
-                "}"
-            ):
+            if kwargs_value.strip().startswith(
+                "{"
+            ) and kwargs_value.strip().endswith("}"):
                 try:
-                    kwargs_dict = json.loads(kwargs_value)
+                    # Clean up common JSON formatting issues
+                    cleaned_json = kwargs_value.strip()
+                    # Remove extra closing braces (common MCP issue)
+                    if cleaned_json.count('}') > cleaned_json.count('{'):
+                        logger.info(f"Fixing JSON with extra closing braces: {cleaned_json}")
+                        # Remove extra } from the end
+                        while cleaned_json.endswith('}}') and cleaned_json.count('}') > cleaned_json.count('{'):
+                            cleaned_json = cleaned_json[:-1]
+                    
+                    kwargs_dict = json.loads(cleaned_json)
                     if isinstance(kwargs_dict, dict):
                         # Add each key-value pair to kwargs
                         for k, v in kwargs_dict.items():
@@ -145,7 +168,9 @@ def process_parameters(
                         f"Failed to parse kwargs as JSON: {kwargs_value}. Error: {str(e)}"
                     )
             elif kwargs_value:
-                logger.warning(f"Received kwargs as non-JSON string: {kwargs_value}")
+                logger.warning(
+                    f"Received kwargs as non-JSON string: {kwargs_value}"
+                )
         elif isinstance(kwargs_value, dict):
             # Add each key-value pair to kwargs
             for k, v in kwargs_value.items():
@@ -157,7 +182,9 @@ def process_parameters(
     return tuple(processed_args), normalized_kwargs
 
 
-def normalize_parameter_names(func_name: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_parameter_names(
+    func_name: str, kwargs: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Normalize parameter names based on common naming conventions and specific tool needs.
 
@@ -207,9 +234,39 @@ def normalize_parameter_names(func_name: str, kwargs: Dict[str, Any]) -> Dict[st
         if "issue_key" in normalized and "issue_id" not in normalized:
             normalized["issue_id"] = normalized.pop("issue_key")
 
-    # User tools mappings
-    if "user_id" in normalized and "user" not in normalized:
-        normalized["user"] = normalized.pop("user_id")
+    # User tools mappings - most user functions expect user_id parameter
+    user_tools_methods = [
+        "get_user", 
+        "get_user_by_id", 
+        "get_user_permissions"
+    ]
+    
+    if func_name in user_tools_methods:
+        # For user tools, ensure user is mapped to user_id
+        if "user" in normalized and "user_id" not in normalized:
+            normalized["user_id"] = normalized.pop("user")
+    else:
+        # For other tools, keep the old mapping if needed
+        if "user_id" in normalized and "user" not in normalized:
+            normalized["user"] = normalized.pop("user_id")
+    
+    # Special handling for search_with_filter
+    if func_name == "search_with_filter":
+        # Handle query parameter - try to parse simple "project: VALUE" format
+        if "query" in normalized:
+            query = normalized.pop("query")
+            # Simple parsing for "project: VALUE" format
+            if query.startswith("project:"):
+                project_value = query.split(":", 1)[1].strip()
+                normalized["project"] = project_value
+        
+        # Handle filters parameter - extract individual filters
+        if "filters" in normalized:
+            filters = normalized.pop("filters")
+            if isinstance(filters, dict):
+                # Merge filter dict into normalized params
+                for key, value in filters.items():
+                    normalized[key] = value
 
     if "user_login" in normalized and "login" not in normalized:
         normalized["login"] = normalized.pop("user_login")
@@ -243,7 +300,9 @@ def create_bound_tool(instance: Any, method_name: str) -> Callable:
     @wraps(method)
     def bound_wrapper(*args, **kwargs):
         # Process the parameters to get the correct format
-        processed_args, processed_kwargs = process_parameters(method_name, args, kwargs)
+        processed_args, processed_kwargs = process_parameters(
+            method_name, args, kwargs
+        )
 
         # Call the method with the processed parameters
         try:
@@ -251,7 +310,10 @@ def create_bound_tool(instance: Any, method_name: str) -> Callable:
         except Exception as e:
             logger.exception(f"Error calling {method_name}: {str(e)}")
             return json.dumps(
-                {"error": f"Error calling {method_name}: {str(e)}", "status": "error"}
+                {
+                    "error": f"Error calling {method_name}: {str(e)}",
+                    "status": "error",
+                }
             )
 
     # Mark this as a bound method

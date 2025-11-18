@@ -30,26 +30,30 @@ class YouTrackMCPServer:
         Initialize the YouTrack MCP server.
 
         Args:
-            transport: The transport to use ('http', 'stdio', or None to auto-detect)
+            transport: The transport mode for logging/diagnostics ('stdio', 'sse', or None).
+                      Used only for logging purposes - does not affect actual behavior.
+                      When None, defaults to 'stdio' for consistency with typical MCP deployment.
+                      Note: FastMCP performs its own internal transport auto-detection
+                      based on stdin.isatty() and this parameter does not override that.
         """
-        # Auto-detect transport if not specified
+        # Default to stdio for logging consistency with typical MCP server deployment
+        # This is purely a diagnostic/logging hint - FastMCP does its own detection
         if transport is None:
-            # Use STDIO when running in a pipe (for Claude integration)
-            if not sys.stdin.isatty() or not sys.stdout.isatty():
-                transport = "stdio"
-            else:
-                transport = "http"
+            transport = "stdio"
 
-        logger.info(f"Initializing YouTrack MCP server with {transport} transport")
-
-        # Store the transport mode for later reference
+        # Store for logging only - not used for any behavioral decisions
         self.transport_mode = transport
 
-        # Initialize server with ToolServerBase
+        logger.info(
+            f"Initializing YouTrack MCP server with {transport} transport mode"
+        )
+
+        # Initialize server with ToolServerBase (FastMCP)
+        # FastMCP does not accept a transport parameter - it auto-detects internally
+        # based on whether stdin/stdout are TTY devices
         self.server = ToolServerBase(
             name=config.MCP_SERVER_NAME,
             instructions=config.MCP_SERVER_DESCRIPTION,
-            transport=transport,  # ToolServerBase expects 'transport' parameter
         )
 
         # Initialize tool registry
@@ -109,7 +113,8 @@ class YouTrackMCPServer:
             ):
                 schema_type = "number"
             elif param_type == bool or (
-                hasattr(param_type, "__origin__") and param_type.__origin__ == bool
+                hasattr(param_type, "__origin__")
+                and param_type.__origin__ == bool
             ):
                 schema_type = "boolean"
             elif param_type in (dict, Dict) or (
@@ -156,7 +161,8 @@ class YouTrackMCPServer:
             func: The tool function
             description: Description of what the tool does
             parameter_descriptions: Optional descriptions for function parameters
-            should_stream: Whether this tool should use streaming (when supported)
+            should_stream: Whether this tool should use streaming (for logging/diagnostic purposes only)
+                          Note: Actual streaming behavior is determined by FastMCP, not this parameter
         """
         # Skip if tool already registered
         if name in self._registered_tools:
@@ -206,24 +212,38 @@ class YouTrackMCPServer:
                 elif "user" in param.name.lower():
                     example_params.append(f'{param.name}="admin"')
                 elif "query" in param.name.lower():
-                    example_params.append(f'{param.name}="project: DEMO #Unresolved"')
-                elif "text" in param.name.lower() or "comment" in param.name.lower():
+                    example_params.append(
+                        f'{param.name}="project: DEMO #Unresolved"'
+                    )
+                elif (
+                    "text" in param.name.lower()
+                    or "comment" in param.name.lower()
+                ):
                     example_params.append(f'{param.name}="This is fixed"')
-                elif "title" in param.name.lower() or "summary" in param.name.lower():
+                elif (
+                    "title" in param.name.lower()
+                    or "summary" in param.name.lower()
+                ):
                     example_params.append(f'{param.name}="Bug report"')
                 elif "description" in param.name.lower():
-                    example_params.append(f'{param.name}="Detailed description"')
+                    example_params.append(
+                        f'{param.name}="Detailed description"'
+                    )
                 else:
                     example_params.append(f'{param.name}="value"')
 
             if example_params:
-                clean_description += f"\n\nExample: {name}({', '.join(example_params)})"
+                clean_description += (
+                    f"\n\nExample: {name}({', '.join(example_params)})"
+                )
 
         # Store schema in the wrapped function for access later
         wrapped_func.tool_schema = schema
 
         # Register with MCP server with the CLEAN description (not verbose)
-        self.server.add_tool(name=name, description=clean_description, fn=wrapped_func)
+        self.server.add_tool(
+            name=name, description=clean_description, fn=wrapped_func
+        )
 
         # Log at debug level instead of info to reduce noise
         logger.debug(f"Registered tool: {name} (streaming: {should_stream})")
@@ -237,18 +257,22 @@ class YouTrackMCPServer:
         Args:
             func: The original tool function
             name: The tool name
-            should_stream: Whether this function should use streaming
+            should_stream: Logging/diagnostic hint only - not used for actual behavior
 
         Returns:
             A wrapped function that handles errors and ensures proper output format
         """
         # Check if function is async
-        is_async = inspect.iscoroutinefunction(func) or inspect.isasyncgenfunction(func)
+        is_async = inspect.iscoroutinefunction(
+            func
+        ) or inspect.isasyncgenfunction(func)
 
         async def async_wrapper(*args, **kwargs):
             """Async wrapper for tool functions."""
             try:
-                logger.debug(f"Tool {name} called with args={args}, kwargs={kwargs}")
+                logger.debug(
+                    f"Tool {name} called with args={args}, kwargs={kwargs}"
+                )
 
                 # MCP-specific parameter handling
                 # MCP often passes parameters as string in 'args' and 'kwargs' fields
@@ -275,13 +299,13 @@ class YouTrackMCPServer:
                                         # Parse as key=value pair
                                         key, value = arg.split("=", 1)
                                         # Remove quotes from value if present
-                                        if value.startswith('"') and value.endswith(
+                                        if value.startswith(
                                             '"'
-                                        ):
+                                        ) and value.endswith('"'):
                                             value = value[1:-1]
-                                        elif value.startswith("'") and value.endswith(
+                                        elif value.startswith(
                                             "'"
-                                        ):
+                                        ) and value.endswith("'"):
                                             value = value[1:-1]
                                         # Clean up any trailing commas
                                         value = value.rstrip(",")
@@ -303,7 +327,9 @@ class YouTrackMCPServer:
                                 # If parsing fails, treat as a single argument
                                 processed_args = [args_value]
                         # If it looks like JSON, try to parse it
-                        elif args_value.startswith("{") and args_value.endswith("}"):
+                        elif args_value.startswith(
+                            "{"
+                        ) and args_value.endswith("}"):
                             try:
                                 args_dict = json.loads(args_value)
                                 # If it's a dict, treat as kwargs
@@ -335,7 +361,9 @@ class YouTrackMCPServer:
 
                     # If kwargs is a string, try to parse as JSON
                     if isinstance(kwargs_value, str):
-                        if kwargs_value.startswith("{") and kwargs_value.endswith("}"):
+                        if kwargs_value.startswith(
+                            "{"
+                        ) and kwargs_value.endswith("}"):
                             try:
                                 kwargs_dict = json.loads(kwargs_value)
                                 if isinstance(kwargs_dict, dict):
@@ -398,9 +426,9 @@ class YouTrackMCPServer:
                             processed_kwargs["issue_id"] = processed_args[0]
                             processed_kwargs["text"] = processed_args[1]
                             processed_args = []
-                        elif len(processed_args) == 1 and not processed_kwargs.get(
-                            "issue_id"
-                        ):
+                        elif len(
+                            processed_args
+                        ) == 1 and not processed_kwargs.get("issue_id"):
                             processed_kwargs["issue_id"] = processed_args[0]
                             processed_args = []
 
@@ -410,16 +438,20 @@ class YouTrackMCPServer:
                             processed_kwargs["project"] = processed_args[0]
                             processed_kwargs["summary"] = processed_args[1]
                             if len(processed_args) >= 3:
-                                processed_kwargs["description"] = processed_args[2]
+                                processed_kwargs["description"] = (
+                                    processed_args[2]
+                                )
                             processed_args = []
-                        elif len(processed_args) == 1 and not processed_kwargs.get(
-                            "project"
-                        ):
+                        elif len(
+                            processed_args
+                        ) == 1 and not processed_kwargs.get("project"):
                             processed_kwargs["project"] = processed_args[0]
                             processed_args = []
 
                 # Special handling for issue_create_issue
-                if func.__name__ == "create_issue" and hasattr(func, "__self__"):
+                if func.__name__ == "create_issue" and hasattr(
+                    func, "__self__"
+                ):
                     # This is an instance method, so we need to handle the self parameter
                     instance = func.__self__
                     # Call the method directly on the instance
@@ -431,7 +463,9 @@ class YouTrackMCPServer:
 
                 # Execute the function with the processed parameters
                 if is_async:
-                    result = await self._execute_func_async(func, processed_kwargs)
+                    result = await self._execute_func_async(
+                        func, processed_kwargs
+                    )
                 else:
                     result = await self._execute_func(func, processed_kwargs)
 
@@ -454,7 +488,7 @@ class YouTrackMCPServer:
                     try:
                         response_text = e.response.text
                         error_message += f"\nAPI Response: {response_text}"
-                    except:
+                    except Exception:
                         pass
 
                 # Return formatted error
@@ -485,13 +519,9 @@ class YouTrackMCPServer:
                     # Re-raise other runtime errors
                     raise
 
-        # Return the appropriate wrapper based on the transport mode
-        if self.transport_mode == "http":
-            # For HTTP transport, always use the async wrapper
-            return async_wrapper
-        else:
-            # For stdio transport, use sync wrapper for sync functions
-            return sync_wrapper if not is_async else async_wrapper
+        # Return the appropriate wrapper based on function type
+        # Use async wrapper for coroutine functions, sync wrapper for regular functions
+        return async_wrapper if is_async else sync_wrapper
 
     def _extract_real_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -509,7 +539,11 @@ class YouTrackMCPServer:
         }
 
         # For MCP tools specifically, extract args as first positional parameter
-        if "args" in kwargs and isinstance(kwargs["args"], str) and kwargs["args"]:
+        if (
+            "args" in kwargs
+            and isinstance(kwargs["args"], str)
+            and kwargs["args"]
+        ):
             logger.debug(f"Processing args parameter: {kwargs['args']}")
             try:
                 # Try interpreting args as JSON if it looks like JSON
@@ -603,7 +637,9 @@ class YouTrackMCPServer:
         logger.debug(f"Extracted parameters: {real_kwargs}")
         return real_kwargs
 
-    async def _execute_func_async(self, func: Callable, kwargs: Dict[str, Any]) -> Any:
+    async def _execute_func_async(
+        self, func: Callable, kwargs: Dict[str, Any]
+    ) -> Any:
         """
         Execute a function asynchronously, regardless of whether it's an async function or not.
         This universal executor handles both synchronous and asynchronous functions.
@@ -636,7 +672,9 @@ class YouTrackMCPServer:
                 else:
                     # It's a regular function, run it in an executor to not block
                     loop = asyncio.get_event_loop()
-                    result = await loop.run_in_executor(None, lambda: func(**kwargs))
+                    result = await loop.run_in_executor(
+                        None, lambda: func(**kwargs)
+                    )
 
                 return result
 
@@ -699,7 +737,11 @@ class YouTrackMCPServer:
                     missing_required_params.append(param.name)
 
                 # Handle special case for first positional argument from arg_value
-                if not positional_args and is_positional and "arg_value" in kwargs:
+                if (
+                    not positional_args
+                    and is_positional
+                    and "arg_value" in kwargs
+                ):
                     positional_args.append(kwargs["arg_value"])
 
             # Special case for common parameters like project_id, query, etc.
@@ -743,7 +785,10 @@ class YouTrackMCPServer:
 
                 # For create_issue, add defaults for missing parameters
                 if func.__name__ == "create_issue":
-                    if "project" in missing_required_params and not positional_args:
+                    if (
+                        "project" in missing_required_params
+                        and not positional_args
+                    ):
                         # If we don't have a project, use a default or return error
                         return {
                             "error": "Project is required for creating an issue",
@@ -792,7 +837,9 @@ class YouTrackMCPServer:
             return {"status": "error", "error": str(e)}
 
     # Keep for backward compatibility but mark as deprecated
-    async def _execute_func(self, func: Callable, kwargs: Dict[str, Any]) -> Any:
+    async def _execute_func(
+        self, func: Callable, kwargs: Dict[str, Any]
+    ) -> Any:
         """
         Execute function with given kwargs.
         Deprecated: Use _execute_func_async instead.
@@ -900,4 +947,8 @@ class YouTrackMCPServer:
     def stop(self) -> None:
         """Stop the MCP server."""
         logger.info("Stopping YouTrack MCP server")
+    
+    def close(self) -> None:
+        """Close the MCP server (alias for stop)."""
+        self.stop()
         # Server automatically stops when run() completes

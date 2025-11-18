@@ -2,19 +2,15 @@ FROM python:3.13-alpine
 
 WORKDIR /app
 
-# Install git and build dependencies for Python packages
-RUN apk add --no-cache git gcc musl-dev python3-dev libffi-dev openssl-dev
-
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
+RUN pip install --no-cache-dir --root-user-action=ignore -r requirements.txt && \
     python -c "import mcp; print(dir(mcp))"
 
 # Copy the rest of the application
 COPY . .
 
 # Default environment variables (will be overridden at runtime)
-ENV APP_VERSION="1.0.1"
 ENV MCP_SERVER_NAME="youtrack-mcp"
 ENV MCP_SERVER_DESCRIPTION="YouTrack MCP Server"
 ENV MCP_DEBUG="false"

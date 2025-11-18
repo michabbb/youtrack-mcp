@@ -4,12 +4,13 @@ YouTrack Project MCP tools.
 
 import json
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
 from youtrack_mcp.api.client import YouTrackClient
 from youtrack_mcp.api.issues import IssuesClient
 from youtrack_mcp.api.projects import ProjectsClient
 from youtrack_mcp.mcp_wrappers import sync_wrapper
+from youtrack_mcp.utils import format_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,9 @@ class ProjectTools:
             JSON string with projects information
         """
         try:
-            projects = self.projects_api.get_projects(include_archived=include_archived)
+            projects = self.projects_api.get_projects(
+                include_archived=include_archived
+            )
 
             # Handle both Pydantic models and dictionaries in the response
             result = []
@@ -47,10 +50,10 @@ class ProjectTools:
                 else:
                     result.append(project)  # Assume it's already a dict
 
-            return json.dumps(result, indent=2)
+            return format_json_response(result)
         except Exception as e:
             logger.exception("Error getting projects")
-            return json.dumps({"error": str(e)})
+            return format_json_response({"error": str(e)})
 
     @sync_wrapper
     def get_project(self, project_id: str) -> str:
@@ -65,7 +68,9 @@ class ProjectTools:
         """
         try:
             if not project_id:
-                return json.dumps({"error": "Project ID is required"})
+                return format_json_response(
+                    {"error": "Project ID is required"}
+                )
 
             project_obj = self.projects_api.get_project(project_id)
 
@@ -75,10 +80,10 @@ class ProjectTools:
             else:
                 result = project_obj  # Assume it's already a dict
 
-            return json.dumps(result, indent=2)
+            return format_json_response(result)
         except Exception as e:
             logger.exception(f"Error getting project {project_id}")
-            return json.dumps({"error": str(e)})
+            return format_json_response({"error": str(e)})
 
     @sync_wrapper
     def get_project_by_name(self, project_name: str) -> str:
@@ -100,12 +105,14 @@ class ProjectTools:
                 else:
                     result = project  # Assume it's already a dict
 
-                return json.dumps(result, indent=2)
+                return format_json_response(result)
             else:
-                return json.dumps({"error": f"Project '{project_name}' not found"})
+                return format_json_response(
+                    {"error": f"Project '{project_name}' not found"}
+                )
         except Exception as e:
             logger.exception(f"Error finding project by name {project_name}")
-            return json.dumps({"error": str(e)})
+            return format_json_response({"error": str(e)})
 
     @sync_wrapper
     def get_project_issues(self, project_id: str, limit: int = 50) -> str:
@@ -123,35 +130,47 @@ class ProjectTools:
         """
         try:
             if not project_id:
-                return json.dumps({"error": "Project ID is required"})
+                return format_json_response(
+                    {"error": "Project ID is required"}
+                )
 
             # First try with the direct project ID
             try:
-                issues = self.projects_api.get_project_issues(project_id, limit)
+                issues = self.projects_api.get_project_issues(
+                    project_id, limit
+                )
                 if issues:
-                    return json.dumps(issues, indent=2)
+                    return format_json_response(issues)
             except Exception as e:
                 # If that fails, check if it was a non-ID format error
                 if not str(e).startswith("Project not found"):
-                    logger.exception(f"Error getting issues for project {project_id}")
-                    return json.dumps({"error": str(e)})
+                    logger.exception(
+                        f"Error getting issues for project {project_id}"
+                    )
+                    return format_json_response({"error": str(e)})
 
             # If that failed, try to find project by name
             try:
                 project_obj = self.projects_api.get_project_by_name(project_id)
                 if project_obj:
-                    issues = self.projects_api.get_project_issues(project_obj.id, limit)
-                    return json.dumps(issues, indent=2)
+                    issues = self.projects_api.get_project_issues(
+                        project_obj.id, limit
+                    )
+                    return format_json_response(issues)
                 else:
-                    return json.dumps({"error": f"Project not found: {project_id}"})
+                    return format_json_response(
+                        {"error": f"Project not found: {project_id}"}
+                    )
             except Exception as e:
-                logger.exception(f"Error getting issues for project {project_id}")
-                return json.dumps({"error": str(e)})
+                logger.exception(
+                    f"Error getting issues for project {project_id}"
+                )
+                return format_json_response({"error": str(e)})
         except Exception as e:
             logger.exception(
                 f"Error processing get_project_issues({project_id}, {limit})"
             )
-            return json.dumps({"error": str(e)})
+            return format_json_response({"error": str(e)})
 
     @sync_wrapper
     def get_custom_fields(self, project_id: str) -> str:
@@ -168,17 +187,19 @@ class ProjectTools:
         """
         try:
             if not project_id:
-                return json.dumps({"error": "Project ID is required"})
+                return format_json_response(
+                    {"error": "Project ID is required"}
+                )
 
             fields = self.projects_api.get_custom_fields(project_id)
 
             # Handle various response formats safely
             if fields is None:
-                return json.dumps([])
+                return format_json_response([])
 
             # If it's a dictionary (direct API response)
             if isinstance(fields, dict):
-                return json.dumps(fields, indent=2)
+                return format_json_response(fields)
 
             # If it's a list of objects
             try:
@@ -189,19 +210,187 @@ class ProjectTools:
                         result.append(field.model_dump())
                     elif isinstance(field, dict):
                         result.append(field)
-                else:
-                    # Last resort: convert to string
-                    result.append(str(field))
-                return json.dumps(result, indent=2)
+                    else:
+                        # Last resort: convert to string
+                        result.append(str(field))
+                return format_json_response(result)
             except Exception as e:
                 # If we can't iterate, return the raw string representation
-                logger.warning(f"Could not process custom fields response: {str(e)}")
-                return json.dumps({"custom_fields": str(fields)})
+                logger.warning(
+                    f"Could not process custom fields response: {str(e)}"
+                )
+                return format_json_response({"custom_fields": str(fields)})
         except Exception as e:
             logger.exception(
-                f"Error getting custom fields for project {project_id or project}"
+                f"Error getting custom fields for project {project_id}"
             )
-            return json.dumps({"error": str(e)})
+            return format_json_response({"error": str(e)})
+
+    @sync_wrapper
+    def get_custom_field_schema(self, project_id: str, field_name: str) -> str:
+        """
+        Get detailed schema for a specific custom field in a project.
+
+        FORMAT: get_custom_field_schema(project_id="DEMO", field_name="Priority")
+
+        Args:
+            project_id: The project identifier (e.g., "DEMO", "0-0")
+            field_name: The custom field name
+
+        Returns:
+            JSON string with custom field schema and constraints
+        """
+        try:
+            if not project_id:
+                return format_json_response(
+                    {"error": "Project ID is required"}
+                )
+            
+            if not field_name:
+                return format_json_response(
+                    {"error": "Field name is required"}
+                )
+
+            schema = self.projects_api.get_custom_field_schema(project_id, field_name)
+            
+            if schema:
+                return format_json_response({
+                    "status": "success",
+                    "project_id": project_id,
+                    "field_name": field_name,
+                    "schema": schema
+                })
+            else:
+                return format_json_response({
+                    "status": "not_found",
+                    "error": f"Custom field '{field_name}' not found in project {project_id}",
+                    "suggestion": "Check field name spelling and project configuration"
+                })
+
+        except Exception as e:
+            logger.exception(
+                f"Error getting custom field schema for {field_name} in project {project_id}"
+            )
+            return format_json_response({"error": str(e)})
+
+    @sync_wrapper
+    def get_custom_field_allowed_values(self, project_id: str, field_name: str) -> str:
+        """
+        Get allowed values for enum/state custom fields in a project.
+
+        FORMAT: get_custom_field_allowed_values(project_id="DEMO", field_name="Priority")
+
+        Args:
+            project_id: The project identifier (e.g., "DEMO", "0-0")
+            field_name: The custom field name
+
+        Returns:
+            JSON string with allowed values and their details
+        """
+        try:
+            if not project_id:
+                return format_json_response(
+                    {"error": "Project ID is required"}
+                )
+            
+            if not field_name:
+                return format_json_response(
+                    {"error": "Field name is required"}
+                )
+
+            allowed_values = self.projects_api.get_custom_field_allowed_values(project_id, field_name)
+            
+            return format_json_response({
+                "status": "success",
+                "project_id": project_id,
+                "field_name": field_name,
+                "allowed_values": allowed_values,
+                "value_count": len(allowed_values)
+            })
+
+        except Exception as e:
+            logger.exception(
+                f"Error getting allowed values for field {field_name} in project {project_id}"
+            )
+            return format_json_response({"error": str(e)})
+
+    @sync_wrapper
+    def get_all_custom_fields_schemas(self, project_id: str) -> str:
+        """
+        Get schemas for all custom fields in a project.
+
+        FORMAT: get_all_custom_fields_schemas(project_id="DEMO")
+
+        Args:
+            project_id: The project identifier (e.g., "DEMO", "0-0")
+
+        Returns:
+            JSON string with all custom field schemas
+        """
+        try:
+            if not project_id:
+                return format_json_response(
+                    {"error": "Project ID is required"}
+                )
+
+            schemas = self.projects_api.get_all_custom_fields_schemas(project_id)
+            
+            return format_json_response({
+                "status": "success",
+                "project_id": project_id,
+                "schemas": schemas,
+                "field_count": len(schemas)
+            })
+
+        except Exception as e:
+            logger.exception(
+                f"Error getting all custom field schemas for project {project_id}"
+            )
+            return format_json_response({"error": str(e)})
+
+    @sync_wrapper
+    def validate_custom_field_for_project(
+        self, 
+        project_id: str, 
+        field_name: str, 
+        field_value: Any
+    ) -> str:
+        """
+        Validate a custom field value against the project's schema.
+
+        FORMAT: validate_custom_field_for_project(project_id="DEMO", field_name="Priority", field_value="High")
+
+        Args:
+            project_id: The project identifier (e.g., "DEMO", "0-0")
+            field_name: The custom field name
+            field_value: The value to validate
+
+        Returns:
+            JSON string with validation result and suggestions
+        """
+        try:
+            if not project_id or not field_name:
+                return format_json_response({
+                    "valid": False,
+                    "error": "Project ID and field name are required"
+                })
+
+            validation_result = self.projects_api.validate_custom_field_for_project(
+                project_id, field_name, field_value
+            )
+            
+            return format_json_response(validation_result)
+
+        except Exception as e:
+            logger.exception(
+                f"Error validating custom field {field_name} for project {project_id}"
+            )
+            return format_json_response({
+                "valid": False,
+                "error": f"Validation error: {str(e)}",
+                "field": field_name,
+                "value": field_value
+            })
 
     @sync_wrapper
     def create_project(
@@ -228,11 +417,17 @@ class ProjectTools:
         try:
             # Check for missing required parameters
             if not name:
-                return json.dumps({"error": "Project name is required"})
+                return format_json_response(
+                    {"error": "Project name is required"}
+                )
             if not short_name:
-                return json.dumps({"error": "Project short name is required"})
+                return format_json_response(
+                    {"error": "Project short name is required"}
+                )
             if not lead_id:
-                return json.dumps({"error": "Project leader ID is required"})
+                return format_json_response(
+                    {"error": "Project leader ID is required"}
+                )
 
             project = self.projects_api.create_project(
                 name=name,
@@ -247,10 +442,10 @@ class ProjectTools:
             else:
                 result = project  # Assume it's already a dict
 
-            return json.dumps(result, indent=2)
+            return format_json_response(result)
         except Exception as e:
             logger.exception(f"Error creating project {name}")
-            return json.dumps({"error": str(e)})
+            return format_json_response({"error": str(e)})
 
     @sync_wrapper
     def update_project(
@@ -280,7 +475,9 @@ class ProjectTools:
         """
         try:
             if not project_id:
-                return json.dumps({"error": "Project ID is required"})
+                return format_json_response(
+                    {"error": "Project ID is required"}
+                )
 
             # First, get the existing project to maintain required fields
             try:
@@ -306,11 +503,15 @@ class ProjectTools:
 
                 # If no parameters were provided, return current project
                 if not data:
-                    logger.info("No parameters to update, returning current project")
+                    logger.info(
+                        "No parameters to update, returning current project"
+                    )
                     if hasattr(existing_project, "model_dump"):
-                        return json.dumps(existing_project.model_dump(), indent=2)
+                        return format_json_response(
+                            existing_project.model_dump()
+                        )
                     else:
-                        return json.dumps(existing_project, indent=2)
+                        return format_json_response(existing_project)
 
                 # Log the data being sent
                 logger.info(f"Updating project with data: {data}")
@@ -327,24 +528,147 @@ class ProjectTools:
                 # Get the updated project data
                 try:
                     updated_project = self.projects_api.get_project(project_id)
-                    logger.info(f"Retrieved updated project: {updated_project.name}")
+                    logger.info(
+                        f"Retrieved updated project: {updated_project.name}"
+                    )
 
                     # Return updated project data
                     if hasattr(updated_project, "model_dump"):
-                        return json.dumps(updated_project.model_dump(), indent=2)
+                        return format_json_response(
+                            updated_project.model_dump()
+                        )
                     else:
-                        return json.dumps(updated_project, indent=2)
+                        return format_json_response(updated_project)
                 except Exception as e:
-                    logger.warning(f"Could not retrieve updated project: {str(e)}")
+                    logger.warning(
+                        f"Could not retrieve updated project: {str(e)}"
+                    )
                     return json.dumps(
-                        {"id": project_id, "status": "updated", "warning": str(e)}
+                        {
+                            "id": project_id,
+                            "status": "updated",
+                            "warning": str(e),
+                        }
                     )
             except Exception as e:
                 logger.exception(f"Error updating project {project_id}")
-                return json.dumps({"error": str(e)})
+                return format_json_response({"error": str(e)})
         except Exception as e:
             logger.exception(f"Error processing update_project request")
-            return json.dumps({"error": str(e)})
+            return format_json_response({"error": str(e)})
+
+    @sync_wrapper
+    def create_subsystem(self, project_id: str, name: str, description: str = "") -> str:
+        """
+        Create a subsystem for a project.
+
+        FORMAT: create_subsystem(project_id="DEMO", name="Backend", description="Backend components")
+
+        Args:
+            project_id: The project identifier (e.g., "DEMO", "0-0")
+            name: The subsystem name
+            description: Optional description
+
+        Returns:
+            JSON string with created subsystem information
+        """
+        try:
+            if not project_id or not name:
+                return format_json_response({
+                    "error": "Project ID and subsystem name are required"
+                })
+
+            data = {
+                "name": name,
+                "description": description
+            }
+
+            result = self.client.post(f"admin/projects/{project_id}/subsystems", data=data)
+            return format_json_response({
+                "status": "success",
+                "message": f"Created subsystem '{name}' in project {project_id}",
+                "subsystem": result
+            })
+
+        except Exception as e:
+            logger.exception(f"Error creating subsystem {name} in project {project_id}")
+            return format_json_response({"error": str(e)})
+
+    @sync_wrapper
+    def create_version(self, project_id: str, name: str, description: str = "", released: bool = False) -> str:
+        """
+        Create a version for a project.
+
+        FORMAT: create_version(project_id="DEMO", name="v1.0.0", description="First release")
+
+        Args:
+            project_id: The project identifier (e.g., "DEMO", "0-0")
+            name: The version name
+            description: Optional description
+            released: Whether the version is released (default: False)
+
+        Returns:
+            JSON string with created version information
+        """
+        try:
+            if not project_id or not name:
+                return format_json_response({
+                    "error": "Project ID and version name are required"
+                })
+
+            data = {
+                "name": name,
+                "description": description,
+                "released": released
+            }
+
+            result = self.client.post(f"admin/projects/{project_id}/versions", data=data)
+            return format_json_response({
+                "status": "success",
+                "message": f"Created version '{name}' in project {project_id}",
+                "version": result
+            })
+
+        except Exception as e:
+            logger.exception(f"Error creating version {name} in project {project_id}")
+            return format_json_response({"error": str(e)})
+
+    @sync_wrapper
+    def create_build(self, project_id: str, name: str, description: str = "") -> str:
+        """
+        Create a build for a project.
+
+        FORMAT: create_build(project_id="DEMO", name="build-123", description="Nightly build")
+
+        Args:
+            project_id: The project identifier (e.g., "DEMO", "0-0")
+            name: The build name
+            description: Optional description
+
+        Returns:
+            JSON string with created build information
+        """
+        try:
+            if not project_id or not name:
+                return format_json_response({
+                    "error": "Project ID and build name are required"
+                })
+
+            data = {
+                "name": name,
+                "description": description
+            }
+
+            result = self.client.post(f"admin/projects/{project_id}/builds", data=data)
+            return format_json_response({
+                "status": "success",
+                "message": f"Created build '{name}' in project {project_id}",
+                "build": result
+            })
+
+        except Exception as e:
+            logger.exception(f"Error creating build {name} in project {project_id}")
+            return format_json_response({"error": str(e)})
 
     def close(self) -> None:
         """Close the API client."""
@@ -407,6 +731,59 @@ class ProjectTools:
                     "archived": "Whether to archive the project (optional)",
                     "lead_id": "New project leader ID (optional)",
                     "short_name": "New short name for issue prefixes (optional)",
+                },
+            },
+            "get_custom_field_schema": {
+                "description": 'Get detailed schema for a specific custom field in a project. Example: get_custom_field_schema(project_id="DEMO", field_name="Priority")',
+                "parameter_descriptions": {
+                    "project_id": "Project identifier like 'DEMO' or '0-0'",
+                    "field_name": "Custom field name like 'Priority' or 'Assignee'"
+                },
+            },
+            "get_custom_field_allowed_values": {
+                "description": 'Get allowed values for enum/state custom fields in a project. Example: get_custom_field_allowed_values(project_id="DEMO", field_name="Priority")',
+                "parameter_descriptions": {
+                    "project_id": "Project identifier like 'DEMO' or '0-0'",
+                    "field_name": "Custom field name like 'Priority' or 'State'"
+                },
+            },
+            "get_all_custom_fields_schemas": {
+                "description": 'Get schemas for all custom fields in a project. Example: get_all_custom_fields_schemas(project_id="DEMO")',
+                "parameter_descriptions": {
+                    "project_id": "Project identifier like 'DEMO' or '0-0'"
+                },
+            },
+            "validate_custom_field_for_project": {
+                "description": 'Validate a custom field value against the project schema. Example: validate_custom_field_for_project(project_id="DEMO", field_name="Priority", field_value="High")',
+                "parameter_descriptions": {
+                    "project_id": "Project identifier like 'DEMO' or '0-0'",
+                    "field_name": "Custom field name like 'Priority' or 'Assignee'",
+                    "field_value": "Value to validate against field constraints"
+                },
+            },
+            "create_subsystem": {
+                "description": 'Create a subsystem for a project to enable subsystem custom fields. Example: create_subsystem(project_id="DEMO", name="Backend", description="Backend components")',
+                "parameter_descriptions": {
+                    "project_id": "Project identifier like 'DEMO' or '0-0'",
+                    "name": "Subsystem name like 'Backend' or 'Frontend'",
+                    "description": "Optional description of the subsystem"
+                },
+            },
+            "create_version": {
+                "description": 'Create a version for a project to enable version custom fields. Example: create_version(project_id="DEMO", name="v1.0.0", description="First release")',
+                "parameter_descriptions": {
+                    "project_id": "Project identifier like 'DEMO' or '0-0'",
+                    "name": "Version name like 'v1.0.0' or '2024.1'",
+                    "description": "Optional description of the version",
+                    "released": "Whether the version is released (default: False)"
+                },
+            },
+            "create_build": {
+                "description": 'Create a build for a project to enable build custom fields. Example: create_build(project_id="DEMO", name="build-123", description="Nightly build")',
+                "parameter_descriptions": {
+                    "project_id": "Project identifier like 'DEMO' or '0-0'",
+                    "name": "Build name like 'build-123' or 'release-1.0'",
+                    "description": "Optional description of the build"
                 },
             },
         }
