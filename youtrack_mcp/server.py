@@ -30,27 +30,27 @@ class YouTrackMCPServer:
         Initialize the YouTrack MCP server.
 
         Args:
-            transport: The transport to use ('http', 'stdio', or None to auto-detect)
-                      Note: This parameter is kept for backward compatibility but
-                      FastMCP will auto-detect the transport mode based on stdin/stdout.
+            transport: The transport mode hint ('stdio', 'sse', or None).
+                      Used for wrapper selection and logging only.
+                      When None, defaults to 'stdio' for MCP server compatibility.
+                      Note: FastMCP performs its own internal transport auto-detection
+                      based on stdin.isatty() - this parameter does not override that.
         """
-        # FastMCP auto-detects transport based on whether stdin/stdout are TTY
-        # When running as MCP server (piped): stdin.isatty() = False -> uses STDIO transport
-        # When running interactively: stdin.isatty() = True -> typically interactive mode
-
-        # Store the transport mode hint for logging and wrapper selection
-        # Default to stdio to match FastMCP's most common use case (MCP servers)
+        # Default to stdio transport for MCP server use case
+        # This matches the most common deployment scenario (Claude Desktop, stdio piping)
+        # Note: This is a hint for our wrapper selection, not passed to FastMCP
         if transport is None:
             transport = "stdio"
 
         self.transport_mode = transport
 
         logger.info(
-            f"Initializing YouTrack MCP server with {transport} transport (FastMCP will auto-detect)"
+            f"Initializing YouTrack MCP server with {transport} transport mode (hint for wrapper selection)"
         )
 
         # Initialize server with ToolServerBase (FastMCP)
-        # FastMCP auto-detects transport - we don't override it
+        # Note: FastMCP does not accept a transport parameter - it auto-detects
+        # based on whether stdin/stdout are TTY devices
         self.server = ToolServerBase(
             name=config.MCP_SERVER_NAME,
             instructions=config.MCP_SERVER_DESCRIPTION,
