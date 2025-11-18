@@ -137,6 +137,42 @@ create_issue(
 )
 ```
 
+### **✏️ Updating Issues (Summary & Description)**
+```python
+# Update summary and description
+update_issue(
+    issue_id="DEMO-123",
+    summary="Updated: Bug in login system",
+    description="Detailed description of the bug"
+)
+
+# Update with Markdown formatting
+update_issue(
+    issue_id="DEMO-123",
+    summary="Bug Report",
+    description="## Problem\n**Critical** bug in login\n\n- Step 1\n- Step 2",
+    uses_markdown=True
+)
+
+# Update with HTML content (requires uses_markdown=True)
+update_issue(
+    issue_id="DEMO-123",
+    description="Text content\n{html}<b>Bold HTML</b>{html}",
+    uses_markdown=True
+)
+
+# Update only summary
+update_issue(issue_id="DEMO-123", summary="New title")
+
+# Update only description
+update_issue(issue_id="DEMO-123", description="New description")
+```
+
+**Important:** Set `uses_markdown=True` when using:
+- Markdown formatting (`**bold**`, `*italic*`, `# headers`, etc.)
+- HTML content wrapped in `{html}...{html}` tags
+- Mixed Markdown and HTML content
+
 ### **🔗 Linking Issues**
 ```python
 # Create dependency
@@ -247,6 +283,7 @@ npx @tonyzorin/youtrack-mcp
 ## Features
 
 - **Issue Management**: Create, read, update, and delete YouTrack issues
+- **Markdown & HTML Support**: Full support for Markdown formatting and HTML content in issue descriptions
 - **Project Management**: Access project information and custom fields
 - **Search Capabilities**: Advanced search with filters and custom fields
 - **User Management**: Retrieve user information and permissions
