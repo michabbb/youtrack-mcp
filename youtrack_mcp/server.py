@@ -31,24 +31,31 @@ class YouTrackMCPServer:
 
         Args:
             transport: The transport to use ('http', 'stdio', or None to auto-detect)
+                      Note: This parameter is kept for backward compatibility but
+                      FastMCP will auto-detect the transport mode based on stdin/stdout.
         """
-        # Auto-detect transport if not specified
+        # FastMCP auto-detects transport based on whether stdin/stdout are TTY
+        # When running as MCP server (piped): stdin.isatty() = False -> uses STDIO transport
+        # When running interactively: stdin.isatty() = True -> could use HTTP (but we force STDIO)
+
+        # Store the transport mode hint for logging and wrapper selection
+        # If not specified, we'll determine it the same way FastMCP does
         if transport is None:
-            # Use STDIO when running in a pipe (for Claude integration)
-            if not sys.stdin.isatty() or not sys.stdout.isatty():
+            # FastMCP's logic: if stdin is NOT a TTY, it's being piped -> use STDIO
+            # This matches Claude Desktop's behavior when it spawns the MCP server
+            if not sys.stdin.isatty():
                 transport = "stdio"
             else:
-                transport = "http"
+                transport = "stdio"  # Default to stdio for consistency
 
-        logger.info(
-            f"Initializing YouTrack MCP server with {transport} transport"
-        )
-
-        # Store the transport mode for later reference
         self.transport_mode = transport
 
+        logger.info(
+            f"Initializing YouTrack MCP server with {transport} transport (FastMCP will auto-detect)"
+        )
+
         # Initialize server with ToolServerBase (FastMCP)
-        # Note: FastMCP doesn't accept transport parameter - it auto-detects
+        # FastMCP auto-detects transport - we don't override it
         self.server = ToolServerBase(
             name=config.MCP_SERVER_NAME,
             instructions=config.MCP_SERVER_DESCRIPTION,
